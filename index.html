@@ -435,6 +435,26 @@
     </div>
   </div>
 
+<!-- ===================================================================== -->
+  <!-- MODAL DISKUALIFIKASI (PELANGGARAN 3 KALI)                             -->
+  <!-- ===================================================================== -->
+  <div id="modal-disqualified" class="hidden fixed inset-0 z-[60] bg-red-950/95 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 text-center shadow-2xl border-4 border-red-600">
+      <div class="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-3xl mx-auto mb-3">
+        ⛔
+      </div>
+      <h2 class="text-xl font-extrabold text-red-700 mb-2">UJIAN DIHENTIKAN!</h2>
+      <p class="text-sm font-bold text-slate-800 mb-4 leading-relaxed">
+        Anda didiskualifikasi karena telah melakukan pelanggaran sebanyak 3 kali
+      </p>
+      <div class="p-3 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs font-semibold mb-5">
+        Akses pengerjaan soal telah dikunci secara otomatis. Silakan lapor kepada pengawas ruang.
+      </div>
+      <button type="button" onclick="finishAfterDisqualification()" class="w-full py-3 rounded-xl bg-red-700 hover:bg-red-800 text-white font-extrabold text-sm shadow-lg transition">
+        Lihat Status & Bukti Ujian
+      </button>
+    </div>
+  </div>
   <!-- ===================================================================== -->
   <!-- MODAL KONFIRMASI SELESAI UJIAN                                        -->
   <!-- ===================================================================== -->
@@ -757,6 +777,7 @@
       VALID_TOKENS: ['ASAS2026', 'FJRKIPA26'],
       VALID_PINS: ['011226', '1234'],
       DURATION_SECONDS: 120 * 60, // 120 Menit
+MAX_VIOLATIONS: 3,
       DEFAULT_WEBHOOK_URL: '', // https://script.google.com/macros/s/AKfycbx29e_b65QeDUhEQ0GwjVMIQ-eeDHoqFA7sLdnqoy9z7yOEIWKbnmcM7ytyOg9HIr8O/exec
       STORAGE_KEYS: {
         SISWA: 'cbt_alishlah_siswa_v1',
@@ -1361,6 +1382,9 @@
       if (!raw) return;
       try {
         const sess = JSON.parse(raw);
+if (sess && (sess.isDisqualified || sess.violations >= CONFIG.MAX_VIOLATIONS)) {
+          return;
+        }
         if (sess && !sess.isFinished && sess.remainingSeconds > 0) {
           document.getElementById('resume-banner').classList.remove('hidden');
           document.getElementById('resume-info').textContent = `${sess.nama} (${sess.kelas}) — Sisa waktu: ${formatTime(sess.remainingSeconds)}`;
@@ -1451,6 +1475,7 @@
         answers: {}, // { [questionId]: 'A' | ['B','S','B'] | true }
         ragu: {},    // { [questionId]: true/false }
         violations: 0,
+isDisqualified: false,
         isFinished: false
       };
 
@@ -1464,6 +1489,10 @@
       const raw = localStorage.getItem(CONFIG.STORAGE_KEYS.SESSION);
       if (!raw) return;
       activeSession = JSON.parse(raw);
+if (activeSession.isDisqualified || activeSession.violations >= CONFIG.MAX_VIOLATIONS) {
+        handleDisqualification();
+        return;
+      }
       requestFullScreenSafe();
       enterExamWorkspace();
     }
@@ -1882,12 +1911,33 @@
       document.getElementById('violation-count').textContent = activeSession.violations;
       document.getElementById('modal-violation-count').textContent = activeSession.violations;
       document.getElementById('anticheat-reason').textContent = reason;
+if (activeSession.violations >= CONFIG.MAX_VIOLATIONS) {
+        handleDisqualification();
+        return;
+      }
       document.getElementById('modal-anticheat').classList.remove('hidden');
     }
-
     function dismissAntiCheatModal() {
       document.getElementById('modal-anticheat').classList.add('hidden');
       requestFullScreenSafe();
+    }
+function handleDisqualification() {
+      if (!activeSession) return;
+
+      isExamActive = false;
+      activeSession.isDisqualified = true;
+      activeSession.isFinished = true;
+      if (timerInterval) clearInterval(timerInterval);
+      saveSession();
+
+      document.getElementById('modal-anticheat').classList.add('hidden');
+      document.getElementById('view-exam').classList.add('hidden');
+      document.getElementById('modal-disqualified').classList.remove('hidden');
+    }
+
+    function finishAfterDisqualification() {
+      document.getElementById('modal-disqualified').classList.add('hidden');
+      submitExam(true);
     }
 
     // =========================================================================
